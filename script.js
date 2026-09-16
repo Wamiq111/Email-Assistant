@@ -118,26 +118,28 @@ const generateReply = async () => {
 
     let reply = "";
     try {
-        const prompt = `You are a professional email assistant. Write a ${length} email reply in ${language} with a ${tone} tone to the following email:\n\n${emailContent}\n\nDo NOT include conversational filler, just output the reply directly.`;
-
-        const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+        // Call our secure serverless API route (on Vercel this uses GROQ_API_KEY env var)
+        const response = await fetch('/api/generate', {
             method: 'POST',
-            headers: {
-                'Authorization': `Bearer ${window.GROQ_API_KEY || 'YOUR_GROQ_API_KEY'}`,
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                model: 'openai/gpt-oss-120b',
-                messages: [{ role: 'user', content: prompt }]
-            })
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ emailContent, tone, length, language })
         });
 
-        if (!response.ok) {
-            throw new Error(`API Error: ${response.statusText}`);
+        if (response.ok) {
+            const data = await response.json();
+            reply = data.reply;
+        } else {
+            // Fallback for local development: call Groq directly via config.js
+            const localKey = window.GROQ_API_KEY || 'YOUR_GROQ_API_KEY';
+            const prompt = `You are a professional email assistant. Write a ${length} email reply in ${language} with a ${tone} tone to the following email:\n\n${emailContent}\n\nDo NOT include conversational filler, just output the reply directly.`;
+            const groqRes = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${localKey}`, 'Content-Type': 'application/json' },
+                body: JSON.stringify({ model: 'openai/gpt-oss-120b', messages: [{ role: 'user', content: prompt }] })
+            });
+            const groqData = await groqRes.json();
+            reply = groqData.choices?.[0]?.message?.content?.trim() || 'Failed to generate reply.';
         }
-
-        const data = await response.json();
-        reply = data.choices[0].message.content.trim();
     } catch (e) {
         console.error(e);
         reply = "An error occurred while generating the reply. Please try again.";
